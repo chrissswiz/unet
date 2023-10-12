@@ -1,3 +1,4 @@
+
 import sys
 
 import cv2
@@ -77,7 +78,6 @@ class MaterialButton(QPushButton):
             }
             """
         )
-    # def wheelEvent(self, event):
 
 
 class Window(QMainWindow):
@@ -111,7 +111,7 @@ class Window(QMainWindow):
 
         # configs
         self.half_point_size = 5
-
+        self.line_width=5
         # app stats
         self.image_path = None
         self.color_idx = 0
@@ -153,12 +153,15 @@ class Window(QMainWindow):
         vbox = QVBoxLayout(self)
         vbox.addWidget(self.view)
 
+
         load_button = MaterialButton("加载图片")
         save_button = MaterialButton("保存mask")
         undo_button = MaterialButton("返回上一步")
         draw_button = MaterialButton("drwa模式")
         restore_button = MaterialButton("restore模式")
         difference_button = MaterialButton("difference模式")
+        edge_button = MaterialButton("描边")
+        delete_button = MaterialButton("无规则删除")
         # history_button = MaterialButton("查看历史记录")
         # toggle_mode_button = MaterialButton("切换模式")  # 切换模式按钮
 
@@ -180,6 +183,8 @@ class Window(QMainWindow):
         hbox.addWidget(draw_button)
         hbox.addWidget(restore_button)
         hbox.addWidget(difference_button)
+        hbox.addWidget(edge_button)
+        hbox.addWidget(delete_button)
         # hbox.addWidget(history_button)
         # hbox.addWidget(toggle_mode_button)  # 将切换模式按钮添加到水平布局中
 
@@ -196,6 +201,8 @@ class Window(QMainWindow):
         draw_button.clicked.connect(self.draw_mode)
         restore_button.clicked.connect(self.restore_mode)
         difference_button.clicked.connect(self.difference_mode)
+        edge_button.clicked.connect(self.toggle_edge_mode)
+        delete_button.clicked.connect(self.delete_edge)
 
         # history_button.clicked.connect(self.view_history)
         # toggle_mode_button.clicked.connect(self.toggle_mode)  # 连接切换模式按钮的点击事件
@@ -206,6 +213,9 @@ class Window(QMainWindow):
         toolbar.addWidget(restore_button)
         toolbar.addWidget(draw_button)
         toolbar.addWidget(difference_button)
+        toolbar.addWidget(edge_button)
+        toolbar.addWidget(delete_button)
+
 
     def quit(self):
         QApplication.quit()
@@ -308,6 +318,7 @@ class Window(QMainWindow):
 
             self.coordinate_history.append((x, y))
             self.history.append(np.copy(self.img_3c))
+
         elif self.mode == "restore":
             self.is_mouse_down = True
             self.start_pos = ev.scenePos().x(), ev.scenePos().y()
@@ -321,33 +332,111 @@ class Window(QMainWindow):
             )
 
             self.restore_state = np.copy(self.img_3c)
+        elif self.mode == "describe":
+            try:
+                self.is_mouse_down = True
+                self.drawing = True
+                self.points = [ev.scenePos()]
+                self.tag = 0
+
+            except Exception as e:
+                print(e)
+        elif self.mode == "delete":
+            self.is_mouse_down = True
+            self.deleteing = True
+            self.points = [ev.scenePos()]
+            self.tag = 0
 
     def mouse_move(self, ev):
         if not self.is_mouse_down:
             return
+        if self.mode!="describe" and self.mode!="delete":
+            x, y = ev.scenePos().x(), ev.scenePos().y()
 
-        x, y = ev.scenePos().x(), ev.scenePos().y()
+            if self.rect is not None:
+                self.scene.removeItem(self.rect)
+            sx, sy = self.start_pos
+            xmin = int(min(x, sx))
+            xmax = int(max(x, sx))
+            ymin = int(min(y, sy))
+            ymax = int(max(y, sy))
 
-        if self.rect is not None:
-            self.scene.removeItem(self.rect)
-        sx, sy = self.start_pos
-        xmin = int(min(x, sx))
-        xmax = int(max(x, sx))
-        ymin = int(min(y, sy))
-        ymax = int(max(y, sy))
 
-        if self.mode == "draw":
-            self.rect = self.scene.addRect(
-                xmin, ymin, xmax - xmin, ymax - ymin, pen=QPen(QColor("red"))
-            )
-        if self.mode == "difference":
-            self.rect = self.scene.addRect(
-                xmin, ymin, xmax - xmin, ymax - ymin, pen=QPen(QColor("yellow"))
-            )
-        elif self.mode == "restore":
-            self.rect = self.scene.addRect(
-                xmin, ymin, xmax - xmin, ymax - ymin, pen=QPen(QColor("green"))
-            )
+            if self.mode == "draw":
+                self.rect = self.scene.addRect(
+                    xmin, ymin, xmax - xmin, ymax - ymin, pen=QPen(QColor("red"))
+                )
+            if self.mode == "difference":
+                self.rect = self.scene.addRect(
+                    xmin, ymin, xmax - xmin, ymax - ymin, pen=QPen(QColor("yellow"))
+                )
+            elif self.mode == "restore":
+                self.rect = self.scene.addRect(
+                    xmin, ymin, xmax - xmin, ymax - ymin, pen=QPen(QColor("green"))
+                )
+        else:
+            if self.mode == "describe" and self.drawing:
+
+
+                try:
+                    #print(self.points)
+
+
+                    current_point = ev.scenePos()
+                    if len(self.points) > 0:
+                        # 使用QPainter进行绘制
+                        if self.tag==0:
+                            self.pixmap = np2pixmap(self.img_3c)
+                            self.update_image()
+                            self.tag=1
+                        painter = QPainter(self.pixmap)
+                        pen = QPen(QColor(0, 255, 0))
+                        pen.setWidth(self.line_width)
+                        painter.setPen(pen)
+                        painter.drawLine(self.points[-1], current_point)
+                        painter.end()
+                        if self.bg_img is not None:
+                            self.scene.removeItem(self.bg_img)
+                        self.bg_img = self.scene.addPixmap(self.pixmap)
+
+                        self.points.append(current_point)
+
+                        #self.bg_img.setPos(0, 0)
+
+
+                except Exception as e:
+                    print(e)
+
+            elif self.mode == "delete" and self.deleteing:
+
+                try:
+                    # print(self.points)
+
+                    current_point = ev.scenePos()
+                    if len(self.points) > 0:
+                        # 使用QPainter进行绘制
+                        if self.tag == 0:
+                            self.pixmap = np2pixmap(self.img_3c)
+                            self.update_image()
+                            self.tag = 1
+                        painter = QPainter(self.pixmap)
+                        pen = QPen(QColor(0, 255, 0))
+                        pen.setWidth(self.line_width)
+                        painter.setPen(pen)
+                        painter.drawLine(self.points[-1], current_point)
+                        painter.end()
+                        if self.bg_img is not None:
+                            self.scene.removeItem(self.bg_img)
+                        self.bg_img = self.scene.addPixmap(self.pixmap)
+
+                        self.points.append(current_point)
+
+                        # self.bg_img.setPos(0, 0)
+
+
+                except Exception as e:
+                    print(e)
+
 
     def update_image(self):
         pixmap = np2pixmap(self.img_3c)
@@ -385,12 +474,13 @@ class Window(QMainWindow):
                 self.img_3c[ymin:ymax, xmin:xmax] = image_array
             self.update_image()
 
+
         if self.mode == "difference":
             xmin = int(min(self.start_pos[0], ev.scenePos().x()))
             xmax = int(max(self.start_pos[0], ev.scenePos().x()))
             ymin = int(min(self.start_pos[1], ev.scenePos().y()))
             ymax = int(max(self.start_pos[1], ev.scenePos().y()))
-            print(1-((self.img_3c[ymin:ymax, xmin:xmax]==self.initial_image[ymin:ymax, xmin:xmax]).sum()/self.img_3c[ymin:ymax, xmin:xmax].size))
+            self.show_difference_percentage(xmin, xmax, ymin, ymax)
 
 
         elif self.mode == "restore":
@@ -405,6 +495,35 @@ class Window(QMainWindow):
 
             self.img_3c[ymin:ymax, xmin:xmax] = region_to_restore
             self.update_image()
+
+        elif self.mode == "describe" and self.drawing:
+            try:
+                self.drawing = False
+                self.tag = 0
+                if len(self.points) >= 3:
+                    start_point = self.points[0]
+                    end_point = self.points[-1]
+
+                self.drawEdge(start_point, end_point)
+                self.fillMask()
+                self.applyMask()
+                # self.update_image()
+            except Exception as e:
+                print(e)
+        elif self.mode == "delete" and self.deleteing:
+            try:
+                self.deleteing = False
+                self.tag = 0
+                # print(self.points)
+                if len(self.points) >= 3:
+                    start_point = self.points[0]
+                    end_point = self.points[-1]
+
+                self.drawEdge(start_point, end_point)
+
+                self.deleteMask()
+            except Exception as e:
+                print(e)
 
     def undo_last_edit(self):
         if self.history:
@@ -425,6 +544,78 @@ class Window(QMainWindow):
         # if image1.shape != image2.shape:
         #     image1 = cv2.resize(image1, (image2.shape[1], image2.shape[0]))
 
+    def show_difference_percentage(self, xmin, xmax, ymin, ymax):
+        region_to_compare = self.initial_image[ymin:ymax, xmin:xmax]
+        region_to_render = self.img_3c[ymin:ymax, xmin:xmax]
+
+        diff_percentage = 1 - ((region_to_compare == region_to_render).sum() / region_to_compare.size)
+
+        # 创建弹窗来显示百分比和区域
+        region_info = f"Region:\n{region_to_render}"
+        message = f"Difference Percentage: {diff_percentage:.2%}"
+        QMessageBox.information(self, "Difference Percentage", message)
+
+    def toggle_mode(self):
+        if self.mode == "draw":
+            self.mode = "restore"
+        else:
+            self.mode = "draw"
+            self.restore_region_history.clear()
+
+    def toggle_edge_mode(self):
+        self.mode = "describe"
+        self.drawing = False
+        self.points = []
+
+    def delete_edge(self):
+        self.mode = "delete"
+        self.deleteing = True
+        self.points = []
+
+    def fillMask(self):
+        if self.img_3c is not None:
+            height, width, _ = self.img_3c.shape
+            self.mask = np.zeros((height, width, 4), dtype=np.uint8)  # 4通道图像
+
+            points_array = np.array(
+                [(point.x(), point.y()) for point in self.points], dtype=np.int32
+            )
+            # for point in self.points:
+            #     print(self.img_3c[int(point.x()), int(point.y())])
+
+            cv2.fillPoly(self.mask, [points_array], (128, 0, 0, 50))
+
+    def deleteMask(self):
+        if self.img_3c is not None:
+            height, width, _ = self.img_3c.shape
+            points_array = np.array(
+                [(point.x(), point.y()) for point in self.points], dtype=np.int32
+            )
+
+            mask = np.zeros((height, width), dtype=np.uint8)
+            cv2.fillPoly(mask, [points_array], 1)
+
+            # 3. 使用遮罩提取多边形区域
+            extracted_region = cv2.bitwise_and(self.initial_image, self.initial_image, mask=mask)
+
+            # 4. 将提取的区域替换为要填充的内容
+            result_image = self.img_3c.copy()  # 创建目标图像的副本
+            result_image[mask == 1] = extracted_region[mask == 1]
+
+            self.img_3c = result_image
+            self.update_image()
+
+    def applyMask(self):
+        if self.img_3c is not None and self.mask is not None:
+            mask_inv = cv2.bitwise_not(self.mask[:, :, 3])
+            img_bg = cv2.bitwise_and(self.img_3c, self.img_3c, mask=mask_inv)
+
+            img_fg = self.mask[:, :, :3]
+
+            result = cv2.add(img_bg, img_fg)
+            self.img_3c = result
+            self.update_image()
+
 
 
 
@@ -435,6 +626,14 @@ class Window(QMainWindow):
 
     def difference_mode(self):
         self.mode = "difference"
+
+    def drawEdge(self, point1, point2):
+
+        if len(self.points) >= 2:
+            for i in range(len(self.points) - 1):
+                pen = QPen(QColor(0, 255, 0))
+                pen.setWidth(self.line_width)
+                self.scene.addLine(point1.x(), point1.y(), point2.x(), point2.y(), pen)
 
 
 app = QApplication(sys.argv)
