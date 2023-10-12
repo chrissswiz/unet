@@ -77,6 +77,7 @@ class MaterialButton(QPushButton):
             }
             """
         )
+    # def wheelEvent(self, event):
 
 
 class Window(QMainWindow):
