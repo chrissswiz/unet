@@ -110,6 +110,7 @@ class Window(QMainWindow):
         super().__init__()
 
         # configs
+        self.last_click_pos = None
         self.half_point_size = 5
         self.line_width=5
         # app stats
@@ -235,7 +236,7 @@ class Window(QMainWindow):
         else:
             img_3c = img_np
 
-        max_width = 9999
+        max_width = 99999
         max_height = 99999
         if img_3c.shape[0] > max_height or img_3c.shape[1] > max_width:
             img_3c = self.resize_image(img_3c, max_width, max_height)
@@ -261,17 +262,11 @@ class Window(QMainWindow):
         self.bg_img1.setPos(0, 0)
         self.bg_img2.setPos(0, 0)
         self.view1.setScene(self.scene)  # 在第一个视图中显示图像
-        self.view2.setScene(self.scene2)  # 在第二个视图中显示相同的图像
-        # self.view2.setScene(self.initial_image)
+        self.view2.setScene(self.scene2)  # 在第二个视图中显示相同的图像-
 
         self.scene.mousePressEvent = self.mouse_press
         self.scene.mouseMoveEvent = self.mouse_move
         self.scene.mouseReleaseEvent = self.mouse_release
-
-        # self.scene2.mousePressEvent = self.mouse_press
-        # self.scene2.mouseMoveEvent = self.mouse_move
-        # self.scene2.mouseReleaseEvent = self.mouse_release
-
 
     def resize_image(self, img, max_width, max_height):
         img_height, img_width, _ = img.shape
@@ -287,65 +282,84 @@ class Window(QMainWindow):
 
         return img
 
-
     def mouse_press(self, ev):
         x, y = ev.scenePos().x(), ev.scenePos().y()
-        if self.mode == "draw":
-            self.is_mouse_down = True
-            self.start_pos = ev.scenePos().x(), ev.scenePos().y()
-            self.start_point = self.scene.addEllipse(
-                x - self.half_point_size,
-                y - self.half_point_size,
-                self.point_size,
-                self.point_size,
-                pen=QPen(QColor("red")),
-                brush=QBrush(QColor("red")),
-            )
 
-            self.coordinate_history.append((x, y))
-            self.history.append(np.copy(self.img_3c))
-        if self.mode == "difference":
-            self.is_mouse_down = True
-            self.start_pos = ev.scenePos().x(), ev.scenePos().y()
-            self.start_point = self.scene.addEllipse(
-                x - self.half_point_size,
-                y - self.half_point_size,
-                self.point_size,
-                self.point_size,
-                pen=QPen(QColor("yellow")),
-                brush=QBrush(QColor("yellow")),
-            )
-
-            self.coordinate_history.append((x, y))
-            self.history.append(np.copy(self.img_3c))
-
-        elif self.mode == "restore":
-            self.is_mouse_down = True
-            self.start_pos = ev.scenePos().x(), ev.scenePos().y()
-            self.start_point = self.scene.addEllipse(
-                x - self.half_point_size,
-                y - self.half_point_size,
-                self.point_size,
-                self.point_size,
-                pen=QPen(QColor("green")),
-                brush=QBrush(QColor("green")),
-            )
-
-            self.restore_state = np.copy(self.img_3c)
-        elif self.mode == "describe":
-            try:
+        try:
+            if self.mode == "draw":
+                # 处理绘制逻辑
+                self.is_mouse_down = True
+                self.start_pos = ev.scenePos().x(), ev.scenePos().y()
+                self.start_point = self.scene.addEllipse(
+                    x - self.half_point_size,
+                    y - self.half_point_size,
+                    self.point_size,
+                    self.point_size,
+                    pen=QPen(QColor("red")),
+                    brush=QBrush(QColor("red")),
+                )
+                self.coordinate_history.append((x, y))
+                self.history.append(np.copy(self.img_3c))
+                self.last_click_pos = (x, y)
+            elif self.mode == "difference":
+                # 处理差异模式逻辑
+                self.is_mouse_down = True
+                self.start_pos = ev.scenePos().x(), ev.scenePos().y()
+                self.start_point = self.scene.addEllipse(
+                    x - self.half_point_size,
+                    y - self.half_point_size,
+                    self.point_size,
+                    self.point_size,
+                    pen=QPen(QColor("yellow")),
+                    brush=QBrush(QColor("yellow")),
+                )
+                self.coordinate_history.append((x, y))
+                self.history.append(np.copy(self.img_3c))
+            elif self.mode == "restore":
+                # 处理恢复模式逻辑
+                self.is_mouse_down = True
+                self.start_pos = ev.scenePos().x(), ev.scenePos().y()
+                self.start_point = self.scene.addEllipse(
+                    x - self.half_point_size,
+                    y - self.half_point_size,
+                    self.point_size,
+                    self.point_size,
+                    pen=QPen(QColor("green")),
+                    brush=QBrush(QColor("green")),
+                )
+                self.restore_state = np.copy(self.img_3c)
+            elif self.mode == "describe":
+                # 处理描述模式逻辑
+                self.start_point = self.scene.addEllipse(
+                    x - self.half_point_size,
+                    y - self.half_point_size,
+                    self.point_size,
+                    self.point_size,
+                    pen=QPen(QColor("yellow")),
+                    brush=QBrush(QColor("yellow")),
+                )
                 self.is_mouse_down = True
                 self.drawing = True
                 self.points = [ev.scenePos()]
                 self.tag = 0
-
-            except Exception as e:
-                print(e)
-        elif self.mode == "delete":
-            self.is_mouse_down = True
-            self.deleteing = True
-            self.points = [ev.scenePos()]
-            self.tag = 0
+                self.history.append(np.copy(self.img_3c))
+            elif self.mode == "delete":
+                # 处理删除模式逻辑
+                self.start_point = self.scene.addEllipse(
+                    x - self.half_point_size,
+                    y - self.half_point_size,
+                    self.point_size,
+                    self.point_size,
+                    pen=QPen(QColor("yellow")),
+                    brush=QBrush(QColor("yellow")),
+                )
+                self.is_mouse_down = True
+                self.deleteing = True
+                self.points = [ev.scenePos()]
+                self.tag = 0
+                self.history.append(np.copy(self.img_3c))
+        except Exception as e:
+            print(f"An error occurred: {str(e)}")
 
     def mouse_move(self, ev):
         if not self.is_mouse_down:
@@ -378,7 +392,7 @@ class Window(QMainWindow):
             if self.mode == "describe" and self.drawing:
 
 
-                try:
+                # try:
                     #print(self.points)
 
 
@@ -404,12 +418,12 @@ class Window(QMainWindow):
                         #self.bg_img.setPos(0, 0)
 
 
-                except Exception as e:
-                    print(e)
+                # except Exception as e:
+                #     print(e)
 
             elif self.mode == "delete" and self.deleteing:
 
-                try:
+                # try:
                     # print(self.points)
 
                     current_point = ev.scenePos()
@@ -434,11 +448,12 @@ class Window(QMainWindow):
                         # self.bg_img.setPos(0, 0)
 
 
-                except Exception as e:
-                    print(e)
+                # except Exception as e:
+                #     print(e)
 
 
     def update_image(self):
+        self.update()
         pixmap = np2pixmap(self.img_3c)
         self.scene.removeItem(self.bg_img)
         self.bg_img = self.scene.addPixmap(pixmap)
@@ -466,6 +481,10 @@ class Window(QMainWindow):
                 segmented_image = unet_instance1.detect_image(image)
                 image_array = np.array(segmented_image)
                 self.img_3c[ymin:ymax, xmin:xmax] = image_array
+
+            elif region_to_render_white.shape[0] < 1  and region_to_render_white.shape[1] <1:
+                return
+
             else:
                 print(region_to_render_white.shape)
                 image = Image.fromarray(region_to_render_white)
@@ -538,11 +557,19 @@ class Window(QMainWindow):
             QMessageBox.information(self, "坐标历史记录", "无可用历史记录.")
 
     def save_mask(self):
-        out_path = f"{self.image_path.split('.')[0]}_mask.jpg"
-        io.imsave(out_path, self.img_3c)
-        # # 确保图像具有相同的尺寸
-        # if image1.shape != image2.shape:
-        #     image1 = cv2.resize(image1, (image2.shape[1], image2.shape[0]))
+        # 找到两个数组中相同的像素点
+        matching_pixels = np.any(self.img_3c != self.initial_image, axis=-1)
+
+        # 创建一个新的数组，初始设置为全白
+        result_image = np.ones_like(self.img_3c) * 255
+
+        # 将匹配的像素点设置为全黑
+        result_image[matching_pixels] = [0, 0, 0]
+        # 创建PIL图像对象并保存结果
+        result_image = Image.fromarray(result_image.astype('uint8'))
+        # 创建PIL图像对象并保存结果
+        result_image = Image.fromarray(result_image.astype('uint8'))
+        result_image.save('result_image.png')
 
     def show_difference_percentage(self, xmin, xmax, ymin, ymax):
         region_to_compare = self.initial_image[ymin:ymax, xmin:xmax]
@@ -634,6 +661,25 @@ class Window(QMainWindow):
                 pen = QPen(QColor(0, 255, 0))
                 pen.setWidth(self.line_width)
                 self.scene.addLine(point1.x(), point1.y(), point2.x(), point2.y(), pen)
+
+    def update(self):
+
+        # 找到两个数组中不同的像素点
+        different_pixels = np.any(self.img_3c != self.initial_image, axis=-1)
+
+        # 创建一个红色半透明的图像
+        height, width = different_pixels.shape
+        result_image = np.zeros((height, width, 4), dtype=np.uint8)
+        result_image[different_pixels] = [128, 0, 0, 128]
+        # 打开RGB图像和RGBA图像
+        rgb_image = Image.fromarray(np.uint8(self.initial_image))
+        rgba_image = Image.fromarray(np.uint8(result_image))
+
+        # 将RGBA图像叠加到RGB图像上
+        result_image = Image.alpha_composite(rgb_image.convert("RGBA"), rgba_image).convert("RGB")
+        # 将图像转换为NumPy数组
+        image_array = np.array(result_image)
+        self.img_3c = image_array
 
 
 app = QApplication(sys.argv)
