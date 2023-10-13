@@ -13,10 +13,10 @@
 9. [参考资料 Reference](#Reference)
 
 ## Top News
-**`2022-03`**:**进行大幅度更新、支持step、cos学习率下降法、支持adam、sgd优化器选择、支持学习率根据batch_size自适应调整。**  
+**`2023-03`**:**进行大幅度更新、支持step、cos学习率下降法、支持adam、sgd优化器选择、支持学习率根据batch_size自适应调整。**  
 BiliBili视频中的原仓库地址为：https://github.com/bubbliiiing/unet-pytorch/tree/bilibili
 
-**`2020-08`**:**创建仓库、支持多backbone、支持数据miou评估、标注数据处理、大量注释等。**  
+**`2023-08`**:**创建仓库、支持多backbone、支持数据miou评估、标注数据处理、大量注释等。**  
 
 ## 相关仓库
 | 模型 | 路径 |
