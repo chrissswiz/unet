@@ -2,7 +2,7 @@
 import sys
 
 import cv2
-from PyQt5 import Qt
+from PyQt5 import Qt, QtWidgets
 from PyQt5.QtGui import QIcon, QBrush, QPainter, QPen, QPixmap, QColor, QImage, QGuiApplication
 from PyQt5.QtWidgets import (
     QFileDialog,
@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QGraphicsScene,
     QGraphicsView,
-    QLabel, QDesktopWidget,
+    QLabel, QDesktopWidget, QAction, QSpacerItem, QSizePolicy,
 )
 import numpy as np
 from skimage import io
@@ -30,12 +30,12 @@ from PyQt5.QtWidgets import QMainWindow, QSplitter
 # 创建Unet实例，替换为您的模型路径和参数
 model_path = 'logs3/best_epoch_weights.pth'
 num_classes = 2
-unet_instance = Unet(model_path=model_path, num_classes=num_classes,input_shape=[256, 256])
+unet_instance = Unet(model_path=model_path, num_classes=num_classes,input_shape=[256, 256],cuda = False)
 
 # 创建Unet实例，替换为您的模型路径和参数
 model_path = 'logs4/best_epoch_weights.pth'
 num_classes = 2
-unet_instance1 = Unet(model_path=model_path, num_classes=num_classes,input_shape=[1024, 1024])
+unet_instance1 = Unet(model_path=model_path, num_classes=num_classes,input_shape=[1024, 1024],cuda = False)
 
 def np2pixmap(np_img):
     height, width, channel = np_img.shape
@@ -67,14 +67,15 @@ class MaterialButton(QPushButton):
         self.setStyleSheet(
             """
             QPushButton {
-                background-color: #3F51B5; /* Material Design Blue 500 */
+                background-color: #A9A9A9; /* Material Design Blue 500 */
                 color: white;
-                border-radius: 10px; /* Increase border radius for larger buttons */
+                border-radius: 20px; /* Increase border radius for larger buttons */
                 padding: 15px 20px; /* Increase padding for larger buttons */
-                font-size: 16px; /* Increase font size for larger buttons */
+                font-size: 36px; /* Increase font size for larger buttons */
+                
             }
             QPushButton:hover {
-                background-color: #303F9F; /* Material Design Blue 700 */
+                background-color: #808080; /* Material Design Blue 700 */
             }
             """
         )
@@ -112,7 +113,7 @@ class Window(QMainWindow):
         # configs
         self.last_click_pos = None
         self.half_point_size = 5
-        self.line_width=5
+        self.line_width= 3
         # app stats
         self.image_path = None
         self.color_idx = 0
@@ -151,20 +152,23 @@ class Window(QMainWindow):
 
         pixmap = QPixmap(1024, 1024)
 
-        vbox = QVBoxLayout(self)
-        vbox.addWidget(self.view)
+        # vbox = QVBoxLayout(self)
+        # vbox.addWidget(self.view)
 
 
         load_button = MaterialButton("加载图片")
-        save_button = MaterialButton("保存mask")
+        save_button = MaterialButton("保存")
         undo_button = MaterialButton("返回上一步")
-        draw_button = MaterialButton("drwa模式")
-        restore_button = MaterialButton("restore模式")
-        difference_button = MaterialButton("difference模式")
-        edge_button = MaterialButton("描边")
-        delete_button = MaterialButton("无规则删除")
-        # history_button = MaterialButton("查看历史记录")
-        # toggle_mode_button = MaterialButton("切换模式")  # 切换模式按钮
+        draw_button = MaterialButton("AI标识模式")
+        restore_button = MaterialButton("矩形删除模式")
+        difference_button = MaterialButton("计算无灌注区域占比")
+        edge_button = MaterialButton("手动标识")
+        delete_button = MaterialButton("橡皮擦")
+
+        button_style = (
+            "background-color: #A9A9A9; color: white;"
+            "border-radius: 10px; padding: 15px 20px; font-size: 18px;"
+        )
 
         # 设置初始窗口状态为普通大小窗口，而不是全屏
        # 获取屏幕的大小和任务栏高度
@@ -178,24 +182,30 @@ class Window(QMainWindow):
         self.setGeometry(0, 0, screen_width, screen_height - taskbar_height -112)
 
         hbox = QHBoxLayout(self)
+        # 设置按钮之间的间距
+        hbox.setSpacing(20)  # 设置按钮之间的间距为20像素
         hbox.addWidget(load_button)
         hbox.addWidget(save_button)
+
         hbox.addWidget(undo_button)
         hbox.addWidget(draw_button)
         hbox.addWidget(restore_button)
         hbox.addWidget(difference_button)
         hbox.addWidget(edge_button)
         hbox.addWidget(delete_button)
-        # hbox.addWidget(history_button)
-        # hbox.addWidget(toggle_mode_button)  # 将切换模式按钮添加到水平布局中
 
-        vbox.addLayout(hbox)
+        # # 创建一个小部件来容纳布局
+        # layout_widget = QWidget()
+        # layout_widget.setLayout(hbox)
 
-        self.setLayout(vbox)
+        # vbox.addLayout(hbox)
+        #
+        # self.setLayout(vbox)
 
         self.quit_shortcut = QShortcut("Esc", self)
         self.quit_shortcut.activated.connect(self.quit)
-
+        # load_button.setStyleSheet("margin-right: 10px;")  # 添加右侧边距
+        # save_button.setStyleSheet("margin-left: 20px;")  # 添加左侧边距
         load_button.clicked.connect(self.load_image)
         save_button.clicked.connect(self.save_mask)
         undo_button.clicked.connect(self.undo_last_edit)
@@ -208,14 +218,61 @@ class Window(QMainWindow):
         # history_button.clicked.connect(self.view_history)
         # toggle_mode_button.clicked.connect(self.toggle_mode)  # 连接切换模式按钮的点击事件
         toolbar = self.addToolBar("Tools")
+        # # 将布局小部件添加到工具栏
+        # toolbar.addWidget(layout_widget)
+        # 设置工具栏按钮的样式为Qt.ToolButtonIconOnly
+        toolbar.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        spacer_widget = QWidget()
+        spacer_widget.setFixedWidth(250)  # 设置小部件宽度，这里设为10像素，你可以根据需要调整
+        spacer_widget.setStyleSheet("background: transparent;")  # 设置背景透明
+        toolbar.addWidget(spacer_widget)
+
+        # 添加按钮
         toolbar.addWidget(load_button)
+        # 创建一个透明的小部件来模拟不可见的间隔
+        spacer_widget = QWidget()
+        spacer_widget.setFixedWidth(40)  # 设置小部件宽度，这里设为10像素，你可以根据需要调整
+        spacer_widget.setStyleSheet("background: transparent;")  # 设置背景透明
+        toolbar.addWidget(spacer_widget)
+
         toolbar.addWidget(save_button)
+        spacer_widget2 = QWidget()
+        spacer_widget2.setFixedWidth(40)  # 设置小部件宽度，这里设为10像素，你可以根据需要调整
+        spacer_widget2.setStyleSheet("background: transparent;")  # 设置背景透明
+        toolbar.addWidget(spacer_widget2)
         toolbar.addWidget(undo_button)
+        spacer_widget3 = QWidget()
+        spacer_widget3.setFixedWidth(40)  # 设置小部件宽度，这里设为10像素，你可以根据需要调整
+        spacer_widget3.setStyleSheet("background: transparent;")  # 设置背景透明
+        toolbar.addWidget(spacer_widget3)
         toolbar.addWidget(restore_button)
+        spacer_widget4 = QWidget()
+        spacer_widget4.setFixedWidth(40)  # 设置小部件宽度，这里设为10像素，你可以根据需要调整
+        spacer_widget4.setStyleSheet("background: transparent;")  # 设置背景透明
+        toolbar.addWidget(spacer_widget4)
         toolbar.addWidget(draw_button)
-        toolbar.addWidget(difference_button)
+        spacer_widget5 = QWidget()
+        spacer_widget5.setFixedWidth(40)  # 设置小部件宽度，这里设为10像素，你可以根据需要调整
+        spacer_widget5.setStyleSheet("background: transparent;")  # 设置背景透明
+        toolbar.addWidget(spacer_widget5)
+
+
+
         toolbar.addWidget(edge_button)
+        spacer_widget1 = QWidget()
+        spacer_widget1.setFixedWidth(40)  # 设置小部件宽度，这里设为10像素，你可以根据需要调整
+        spacer_widget1.setStyleSheet("background: transparent;")  # 设置背景透明
+        toolbar.addWidget(spacer_widget1)
         toolbar.addWidget(delete_button)
+        spacer_widget8 = QWidget()
+        spacer_widget8.setFixedWidth(40)  # 设置小部件宽度，这里设为10像素，你可以根据需要调整
+        spacer_widget8.setStyleSheet("background: transparent;")  # 设置背景透明
+        toolbar.addWidget(spacer_widget8)
+        toolbar.addWidget(difference_button)
+        spacer_widget6 = QWidget()
+        spacer_widget6.setFixedWidth(40)  # 设置小部件宽度，这里设为10像素，你可以根据需要调整
+        spacer_widget6.setStyleSheet("background: transparent;")  # 设置背景透明
+        toolbar.addWidget(spacer_widget6)
 
 
     def quit(self):
@@ -330,14 +387,14 @@ class Window(QMainWindow):
                 self.restore_state = np.copy(self.img_3c)
             elif self.mode == "describe":
                 # 处理描述模式逻辑
-                self.start_point = self.scene.addEllipse(
-                    x - self.half_point_size,
-                    y - self.half_point_size,
-                    self.point_size,
-                    self.point_size,
-                    pen=QPen(QColor("yellow")),
-                    brush=QBrush(QColor("yellow")),
-                )
+                # self.start_point = self.scene.addEllipse(
+                #     x - self.half_point_size,
+                #     y - self.half_point_size,
+                #     self.point_size,
+                #     self.point_size,
+                #     pen=QPen(QColor("yellow")),
+                #     brush=QBrush(QColor("yellow")),
+                # )
                 self.is_mouse_down = True
                 self.drawing = True
                 self.points = [ev.scenePos()]
@@ -345,14 +402,14 @@ class Window(QMainWindow):
                 self.history.append(np.copy(self.img_3c))
             elif self.mode == "delete":
                 # 处理删除模式逻辑
-                self.start_point = self.scene.addEllipse(
-                    x - self.half_point_size,
-                    y - self.half_point_size,
-                    self.point_size,
-                    self.point_size,
-                    pen=QPen(QColor("yellow")),
-                    brush=QBrush(QColor("yellow")),
-                )
+                # self.start_point = self.scene.addEllipse(
+                #     x - self.half_point_size,
+                #     y - self.half_point_size,
+                #     self.point_size,
+                #     self.point_size,
+                #     pen=QPen(QColor("yellow")),
+                #     brush=QBrush(QColor("yellow")),
+                # )
                 self.is_mouse_down = True
                 self.deleteing = True
                 self.points = [ev.scenePos()]
@@ -579,7 +636,7 @@ class Window(QMainWindow):
 
         # 创建弹窗来显示百分比和区域
         region_info = f"Region:\n{region_to_render}"
-        message = f"Difference Percentage: {diff_percentage:.2%}"
+        message = f"无灌注区域占矩形区域 : {diff_percentage:.2%}"
         QMessageBox.information(self, "Difference Percentage", message)
 
     def toggle_mode(self):
